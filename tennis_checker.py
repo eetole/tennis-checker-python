@@ -13,7 +13,13 @@ from webdriver_manager.chrome import ChromeDriverManager
 from datetime import datetime, timedelta
 import time
 from typing import List, Dict
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+from dotenv import load_dotenv
+import os
 
+load_dotenv()  # Load environment variables from .env
 
 
 class TennisSlotChecker:
@@ -207,7 +213,7 @@ class TennisSlotChecker:
                 times = weekend_times
 
             xpath = " or ".join([f"contains(text(), '{t}')" for t in times])
-            print(xpath)
+            # print(xpath)
             time_slots = self.driver.find_elements("xpath", f"//b[{xpath}]")
 
 
@@ -299,6 +305,7 @@ class TennisSlotChecker:
 
         # Group by date
         by_date = {}
+        body = ""
         for slot in slots:
             date = slot['date']
             if date not in by_date:
@@ -308,15 +315,19 @@ class TennisSlotChecker:
         for date in sorted(by_date.keys()):
             try:
                 day_name = datetime.strptime(date, '%Y-%m-%d').strftime('%A')
-                print(f"\n📅 {date} ({day_name})")
+                body += f"\n📅 {date} ({day_name})\n"
             except:
-                print(f"\n📅 {date}")
-            print("-" * 70)
+                body += f"\n📅 {date}\n"
+            body += "-" * 70 + "\n"
 
             for slot in by_date[date]:
                 text = slot.get('text', 'N/A')
                 elem_type = slot.get('element_type', 'unknown')
-                print(f"  🎾 {text} [{elem_type}]")
+                body += f"  🎾 {text} [{elem_type}]\n"
+
+        print(body)
+        send_email("Tenniskenttä vapaana", body, 'toni.leppakangas@gmail.com')
+
 
     def save_page_screenshot(self, filename: str = "booking_page.png"):
         """Save screenshot for debugging"""
@@ -327,13 +338,34 @@ class TennisSlotChecker:
             print(f"Could not save screenshot: {str(e)}")
 
 
+def send_email(subject, body, to_email):
+    # Set up the MIME
+    message = MIMEMultipart()
+    message['From'] = os.getenv('EMAIL_ADDRESS')
+    message['To'] = 'toni.leppakangas@gmail.com'
+    message['Subject'] = 'Tenniskenttä vapaana'
+
+    # Add body to email
+    message.attach(MIMEText(body, 'plain'))
+
+    # Log in to server and send email
+    try:
+        with smtplib.SMTP('smtp.gmail.com', 587) as server:
+            server.starttls()  # Secure the connection
+            server.login(os.getenv('EMAIL_ADDRESS'), os.getenv('EMAIL_PASSWORD'))
+            server.send_message(message)
+        print("Email sent successfully!")
+    except Exception as e:
+        print(f"Failed to send email: {e}")
+
+
 def main():
     """Main function to run the checker"""
     print("🎾 Tennis Court Availability Checker (Selenium)")
     print("=" * 70)
 
     # Set to False to see the browser window
-    checker = TennisSlotChecker(headless=False)
+    checker = TennisSlotChecker(headless=True)
 
     try:
         checker.setup_driver()
