@@ -2,7 +2,7 @@ from datetime import datetime
 import json
 import boto3
 import os
-from typing import Dict, List, Any, Optional
+from typing import Optional
 
 class S3Storage:
     def __init__(self, bucket_name: str = 'tennis-slots-bucket',

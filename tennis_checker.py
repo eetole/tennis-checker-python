@@ -18,7 +18,6 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from dotenv import load_dotenv
 import os
-import json
 import boto3
 from S3Storage import S3Storage
 
@@ -340,8 +339,7 @@ class TennisSlotChecker:
 
             for slot in by_date[date]:
                 text = slot.get('text', 'N/A')
-                elem_type = slot.get('element_type', 'unknown')
-                body += f"  🎾 {text} [{elem_type}]\n"
+                body += f"  🎾 {text} \n"
 
         print(body)
         if len(body) > 0:
