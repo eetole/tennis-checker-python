@@ -18,9 +18,41 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from dotenv import load_dotenv
 import os
+import json
+import boto3
+from S3Storage import S3Storage
+
 
 load_dotenv()  # Load environment variables from .env
 
+week_times = [
+    "16:00",
+    "16:30",
+    "17:00",
+    "17:30",
+    "18:00",
+    "18:30",
+    "19:00"]
+weekend_times = [
+    "10:00",
+    "10:30",
+    "11:00",
+    "11:30",
+    "12:00",
+    "12:30",
+    "13:00",
+    "13:30",
+    "14:00",
+    "14:30",
+    "15:00",
+    "15:30",
+    "16:00",
+    "16:30",
+    "17:00",
+    "17:30",
+    "18:00",
+    "18:30",
+    "19:00"]
 
 class TennisSlotChecker:
     def __init__(self, headless: bool = True):
@@ -108,8 +140,14 @@ class TennisSlotChecker:
                 print(f"\nChecking {day_name}, {date_str}...")
 
                 try:
+                    start = time.time()
                     slots = self._parse_current_view(date_str)
+                    end = time.time()
+                    print(f"Checked {date_str} in {end - start:.2f} seconds")
+                    # start = time.time()
                     all_slots.extend(slots)
+                    # end = time.time()
+                    # print(f"Extended slots in {end - start:.2f} seconds")
 
                     # Try to navigate to next day
                     if day_offset < days_ahead - 1:
@@ -178,34 +216,6 @@ class TennisSlotChecker:
                 # time_slots = self.driver.find_elements(By.XPATH,
                 #                                        "//b[contains(text(), '19:30')]")
 
-            week_times = [
-                "16:00",
-                "16:30",
-                "17:00",
-                "17:30",
-                "18:00",
-                "18:30",
-                "19:00"]
-            weekend_times = [
-                "10:00",
-                "10:30",
-                "11:00",
-                "11:30",
-                "12:00",
-                "12:30",
-                "13:00",
-                "13:30",
-                "14:00",
-                "14:30",
-                "15:00",
-                "15:30",
-                "16:00",
-                "16:30",
-                "17:00",
-                "17:30",
-                "18:00",
-                "18:30",
-                "19:00"]
 
             if datetime.now().weekday() < 5:
                 times = week_times
@@ -289,7 +299,7 @@ class TennisSlotChecker:
         except Exception as e:
             print(f"Could not navigate to next day: {str(e)}")
 
-    def display_slots(self, slots: List[Dict]):
+    def display_slots(self, slots: List[Dict], seen_slots):
         """Display available slots in a readable format"""
         if not slots:
             print("\n❌ No available slots found.")
@@ -303,10 +313,18 @@ class TennisSlotChecker:
         print(f"Found {len(slots)} potential available slots:")
         print(f"{'='*70}")
 
+        # print('Seen Slots')
+        # print(seen_slots)
+
         # Group by date
         by_date = {}
         body = ""
         for slot in slots:
+            seen_key = slot['date'] + 'T' + slot['text']
+            if seen_key in seen_slots['slots']:
+                print(f"Slot already seen: {seen_key}")
+                continue
+
             date = slot['date']
             if date not in by_date:
                 by_date[date] = []
@@ -326,7 +344,10 @@ class TennisSlotChecker:
                 body += f"  🎾 {text} [{elem_type}]\n"
 
         print(body)
-        send_email("Tenniskenttä vapaana", body, 'toni.leppakangas@gmail.com')
+        if len(body) > 0:
+            send_email("Tenniskenttä vapaana", body, 'toni.leppakangas@gmail.com')
+        else:
+            print("No new available slots found.")
 
 
     def save_page_screenshot(self, filename: str = "booking_page.png"):
@@ -366,6 +387,7 @@ def main():
 
     # Set to False to see the browser window
     checker = TennisSlotChecker(headless=True)
+    storage = S3Storage()
 
     try:
         checker.setup_driver()
@@ -373,8 +395,10 @@ def main():
         print("\nSearching for available slots...")
         print("(This may take a minute...)\n")
 
-        slots = checker.get_available_slots(days_ahead=7)
-        checker.display_slots(slots)
+        slots = checker.get_available_slots(days_ahead=14)
+        seen_slots = storage.get_slots()
+        checker.display_slots(slots, seen_slots)
+        storage.save_slots(slots)
 
         # Optionally save screenshot for debugging
         # checker.save_page_screenshot()
