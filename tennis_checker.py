@@ -102,6 +102,48 @@ class TennisSlotChecker:
                 print("   - Place the chromedriver binary in your PATH or in the project directory")
                 raise
 
+
+    def setup_driver_linux(self):
+        """Setup Chrome driver with options for Linux (Ubuntu) with Chromium"""
+        chrome_options = Options()
+        if self.headless:
+            chrome_options.add_argument('--headless=new')
+        chrome_options.add_argument('--no-sandbox')
+        chrome_options.add_argument('--disable-dev-shm-usage')
+        chrome_options.add_argument('--disable-gpu')
+        chrome_options.add_argument('--window-size=1920,1080')
+        
+        # For Linux with Chromium
+        chrome_options.binary_location = "/usr/bin/chromium-browser"
+        chrome_options.add_argument('--disable-software-rasterizer')
+        
+        try:
+            # Try with the latest ChromeDriver version
+            driver_manager = ChromeDriverManager().install()
+            service = Service(executable_path=driver_manager)
+            self.driver = webdriver.Chrome(service=service, options=chrome_options)
+            self.driver.implicitly_wait(10)
+        except Exception as e:
+            print(f"Error setting up ChromeDriver: {str(e)}")
+            print("Trying alternative installation method...")
+            try:
+                # Fallback to system chromedriver
+                service = Service(executable_path='/usr/bin/chromedriver')
+                self.driver = webdriver.Chrome(service=service, options=chrome_options)
+                self.driver.implicitly_wait(10)
+            except Exception as e2:
+                print(f"Alternative method failed: {str(e2)}")
+                print("\nTroubleshooting steps for Linux:")
+                print("1. Install required packages:")
+                print("   sudo apt-get update && sudo apt-get install -y chromium-browser chromium-chromedriver")
+                print("2. If using Docker, make sure to include these in your Dockerfile:")
+                print("   RUN apt-get update && apt-get install -y \\")
+                print("       chromium-browser \\")
+                print("       chromium-chromedriver")
+                print("3. Make sure the ChromeDriver version matches your Chromium version")
+                raise
+
+
     def close(self):
         """Close the browser"""
         if self.driver:
@@ -388,12 +430,12 @@ def main():
     storage = S3Storage()
 
     try:
-        checker.setup_driver()
+        checker.setup_driver_linux()
 
         print("\nSearching for available slots...")
         print("(This may take a minute...)\n")
 
-        slots = checker.get_available_slots(days_ahead=14)
+        slots = checker.get_available_slots(days_ahead=1)
         seen_slots = storage.get_slots()
         checker.display_slots(slots, seen_slots)
         storage.save_slots(slots)

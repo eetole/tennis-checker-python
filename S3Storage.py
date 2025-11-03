@@ -48,6 +48,46 @@ class S3Storage:
         
         self.s3 = boto3.client('s3', **s3_params)
 
+        
+        # Ensure the bucket exists
+        self._ensure_bucket_exists()
+        
+    def _ensure_bucket_exists(self):
+        """
+        Check if the bucket exists, and create it if it doesn't.
+        Handles both AWS S3 and LocalStack compatibility.
+        """
+        try:
+            # Try to get the bucket location (this will fail if the bucket doesn't exist)
+            self.s3.head_bucket(Bucket=self.bucket)
+            print(f"Using existing bucket: {self.bucket}")
+        except self.s3.exceptions.ClientError as e:
+            error_code = e.response.get('Error', {}).get('Code')
+            if error_code == '404' or error_code == 'NoSuchBucket':
+                # Bucket doesn't exist, create it
+                print(f"Creating bucket: {self.bucket}")
+                try:
+                    if self.endpoint_url and ('localhost' in self.endpoint_url or 'localstack' in self.endpoint_url):
+                        # For LocalStack, use the simpler create_bucket without LocationConstraint
+                        location = {'LocationConstraint': self.region_name}
+                        self.s3.create_bucket(Bucket=self.bucket, CreateBucketConfiguration=location)
+                    else:
+                        # For real AWS S3, include the region in the LocationConstraint
+                        location = {'LocationConstraint': self.region_name}
+                        self.s3.create_bucket(
+                            Bucket=self.bucket,
+                            CreateBucketConfiguration=location
+                        )
+                    print(f"Successfully created bucket: {self.bucket}")
+                except Exception as create_error:
+                    print(f"Error creating bucket {self.bucket}: {str(create_error)}")
+                    raise
+            else:
+                # Some other error occurred (e.g., access denied)
+                print(f"Error accessing bucket {self.bucket}: {str(e)}")
+                raise
+
+
     def save_slots(self, slots):
 
         # print("Saving to the S3 bucket...")
